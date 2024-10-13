@@ -1,1 +1,5 @@
 /target
+.idea/vcs.xml
+.idea/msg-queue-netty-io.iml
+.idea/modules.xml
+/.idea
