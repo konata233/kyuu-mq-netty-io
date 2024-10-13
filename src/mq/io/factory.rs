@@ -1,3 +1,4 @@
+use std::cmp::min;
 use crate::mq::protocol::proto::DataHead;
 use crate::mq::protocol::protobase::Serialize;
 
@@ -6,12 +7,14 @@ pub enum Command {
 }
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum DataType {
     Message = 0u8,
     Command = 1u8
 }
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum CommandType {
     NewQueue = 0u8,
     NewExchange = 1u8,
@@ -25,6 +28,7 @@ pub enum CommandType {
 }
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum MessageType {
     Push = 0u8,
     Fetch = 1u8,
@@ -32,6 +36,7 @@ pub enum MessageType {
 }
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum RoutingType {
     Direct = 0u8,
     Topic = 1u8,
@@ -39,6 +44,7 @@ pub enum RoutingType {
     Nop = 0xfu8
 }
 
+#[derive(Debug)]
 pub struct RoutingMod {
     pub data_type: DataType,
     pub command_type: Option<CommandType>,
@@ -46,6 +52,7 @@ pub struct RoutingMod {
     pub routing_type: RoutingType
 }
 
+#[derive(Debug)]
 pub enum Routing {
     Route(String),
     Any,
@@ -58,7 +65,7 @@ pub struct MessageFactory {
     version: [u8; 4],
     routing_mod: Option<RoutingMod>,
     command: Option<Command>,
-    route: Option<[Routing; 3]>,
+    route: Vec<Routing>,
     queue_name: String,
     data: Vec<u8>
 }
@@ -125,7 +132,7 @@ impl MessageFactory {
                 }
             ),
             command: None,
-            route: None,
+            route: vec![],
             queue_name: String::from(""),
             data: vec![]
         }
@@ -141,8 +148,8 @@ impl MessageFactory {
         self
     }
 
-    pub fn route(mut self, route: [Routing; 3]) -> MessageFactory {
-        self.route = Some(route);
+    pub fn route(mut self, route: Routing) -> MessageFactory {
+        self.route.push(route);
         self
     }
 
@@ -151,7 +158,11 @@ impl MessageFactory {
         self
     }
 
-    pub fn data(mut self, data: Vec<u8>) -> MessageFactory {
+    pub fn data(mut self, mut data: Vec<u8>) -> MessageFactory {
+        if data.len() % 256 != 0 {
+            let delta = 256 - data.len() % 256;
+            data.resize(data.len() + delta, 0u8);
+        }
         self.data = data;
         self
     }
@@ -220,20 +231,24 @@ impl MessageFactory {
             }
         }
 
-        let command = self.command.unwrap();
         let command_serialized: [u8; 24] =
-            match command {
-                Command::CloseChannel => {
-                    let mut vec = String::from("CLOSE-CH").as_bytes().to_vec();
-                    vec.resize(24, 0u8);
-                    <[u8; 24]>::try_from(vec).unwrap()
+            if let Some(command) = self.command {
+                match command {
+                    Command::CloseChannel => {
+                        let mut vec = String::from("CLOSE-CH").as_bytes().to_vec();
+                        vec.resize(24, 0u8);
+                        <[u8; 24]>::try_from(vec).unwrap()
+                    }
                 }
+            } else {
+                [0u8; 24]
             };
 
-        let route = self.route.unwrap();
+        // dbg!(&self.route);
+        let route = self.route;
         let route_serialized: [u8; 128];
-        let mut route_tmp: [[u8; 32]; 4] = [[0u8; 32]; 4];
-        for i in 0..4 {
+        let mut route_tmp: [[u8; 32]; 3] = [[0u8; 32]; 3];
+        for i in 0..min(route.len(), 3) {
             match route[i] {
                 Routing::Route(ref s) => {
                     let mut vec = s.as_bytes().to_vec();
@@ -250,11 +265,22 @@ impl MessageFactory {
                 }
             }
         }
+        // dbg!(&route_tmp);
+
+        // if the routing keys are not completely filled...
+        for i in 0..(3 - route.len()) {
+            let mut data = String::from("\0").into_bytes().to_vec();
+            data.resize(32, 0u8);
+            route_tmp[2 - i] = <[u8; 32]>::try_from(data).unwrap();
+        }
+
+        let mut queue_tmp = self.queue_name.into_bytes();
+        queue_tmp.resize(32, 0u8);
         route_serialized = <[u8; 128]>::try_from([
             route_tmp[0],
             route_tmp[1],
             route_tmp[2],
-            route_tmp[3]
+            <[u8; 32]>::try_from(queue_tmp).unwrap()
         ].concat()).unwrap();
 
         let mut head = DataHead::new(

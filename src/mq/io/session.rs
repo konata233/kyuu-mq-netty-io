@@ -18,13 +18,28 @@ impl Session {
         }
     }
 
+    pub fn set_read_timeout(&self, timeout: std::time::Duration) {
+        self.stream.lock().unwrap().set_read_timeout(Some(timeout)).unwrap();
+    }
+
+    pub fn set_write_timeout(&self, timeout: std::time::Duration) {
+        self.stream.lock().unwrap().set_write_timeout(Some(timeout)).unwrap();
+    }
+
     pub fn create_channel(&mut self, name: String) -> Option<&mut Channel> {
+        if self.channels.contains_key(&name) {
+            return None;
+        }
         let channel = Channel::new(self.host.clone(), name.clone(), self.stream.clone());
         self.channels.insert(name.clone(), channel);
         self.channels.get_mut(&name)
     }
 
     pub fn drop_channel(&mut self, name: String) {
+        let ch = self.channels.get_mut(&name).unwrap();
+        if !ch.is_closed() {
+            ch.close();
+        }
         self.channels.remove(&name);
     }
 

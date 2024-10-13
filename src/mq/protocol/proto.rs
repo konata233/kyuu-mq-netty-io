@@ -36,8 +36,10 @@ impl DataHead {
                slice_size: u32,
                count: u32,
                msg_sign: u16) -> DataHead {
+        let mut host = virtual_host.as_bytes().to_vec();
+        host.resize(32, 0u8);
         DataHead {
-            virtual_host: <[u8; 32]>::try_from(virtual_host.as_bytes()).unwrap(),
+            virtual_host: <[u8; 32]>::try_from(host).unwrap(),
             channel,
             version: [1u8, 0u8, 0u8, 0u8],
             routing_mod,
