@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex, RwLock};
@@ -10,7 +11,8 @@ pub struct Session {
     stream: Arc<RwLock<TcpStream>>,
     host: String,
     channels: HashMap<String, Arc<RwLock<Channel>>>,
-    self_ref: Option<Arc<RwLock<Session>>>
+    self_ref: Option<Arc<RwLock<Session>>>,
+    cache: HashMap<String, VecDeque<Box<Vec<u8>>>>
 }
 
 impl Session {
@@ -19,7 +21,8 @@ impl Session {
             stream: Arc::new(RwLock::new(TcpStream::connect(addr).unwrap())),
             host,
             channels: HashMap::new(),
-            self_ref: None
+            self_ref: None,
+            cache: HashMap::new(),
         }
     }
 
@@ -41,6 +44,7 @@ impl Session {
             return None;
         }
         let channel =Arc::from(RwLock::from(Channel::new(self.host.clone(), name.clone(), self.self_ref.clone()?)));
+        self.cache.insert(name.clone(), VecDeque::new());
         self.channels.insert(name.clone(), channel);
         self.channels.get_mut(&name).cloned()
     }
@@ -50,6 +54,7 @@ impl Session {
         if !ch.write().unwrap().is_closed() {
             ch.write().unwrap().close();
         }
+        self.cache.remove(&name);
         self.channels.remove(&name);
     }
 
@@ -65,39 +70,38 @@ impl Session {
             .write_all(data.as_slice())
     }
 
-    pub fn read(&mut self) -> Result<(DataHead, Vec<u8>), std::io::Error> {
+    pub fn read(&mut self, channel: &String) -> Result<(Option<DataHead>, Box<Vec<u8>>), Box<dyn Error>> {
         let mut buf_head = [0u8; 256];
-        self.stream.write().unwrap().read_exact(&mut buf_head)?;
-        let head = DataHead::deserialize(buf_head);
-        let count = head.slice_count;
-        let size = head.slice_size;
-        let mut buf = vec![];
-        for _ in 0..count {
-            let mut buf_slice = vec![0u8; size as usize];
-            self.stream.write().unwrap().read_exact(&mut buf_slice)?;
-        }
+        let result = self.stream.write().unwrap().read_exact(&mut buf_head).is_ok();
+        if result {
+            let head = DataHead::deserialize(buf_head);
+            let count = head.slice_count;
+            let size = head.slice_size;
+            let mut buf = vec![];
+            for _ in 0..count {
+                let mut buf_slice = vec![0u8; size as usize];
+                self.stream.write().unwrap().read_exact(&mut buf_slice)?;
+                buf.append(&mut buf_slice);
+            }
 
-        Ok((head, buf))
+            Ok((Some(head), Box::from(buf)))
+        } else {
+            if let Some(cache) = self.cache.get_mut(channel)
+                .unwrap()
+                .pop_front() {
+                Ok((None, cache))
+            } else {
+                Err("read error".into())
+            }
+        }
     }
 
-    pub fn send_and_read(&mut self, data: Vec<u8>) -> Result<(DataHead, Vec<u8>), std::io::Error> {
+    pub fn send_and_read(&mut self, data: Vec<u8>, channel: &String) -> Result<(Option<DataHead>, Box<Vec<u8>>), Box<dyn Error>> {
         self.stream
             .write()
             .unwrap()
             .write_all(data.as_slice())?;
 
-        let mut buf_head = [0u8; 256];
-        self.stream.write().unwrap().read_exact(&mut buf_head)?;
-        let head = DataHead::deserialize(buf_head);
-        let count = head.slice_count;
-        let size = head.slice_size;
-        let mut buf = vec![];
-        for _ in 0..count {
-            let mut buf_slice = vec![0u8; size as usize];
-            self.stream.write().unwrap().read_exact(&mut buf_slice)?;
-            buf.append(&mut buf_slice);
-        }
-
-        Ok((head, buf))
+        self.read(channel)
     }
 }

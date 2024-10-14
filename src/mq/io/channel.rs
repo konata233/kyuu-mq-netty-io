@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::sync::{Arc, RwLock};
 use crate::mq::io::factory::{Command, MessageFactory};
 use crate::mq::io::session::Session;
@@ -8,8 +9,6 @@ pub struct Channel {
     name: String,
     closed: bool,
     session: Arc<RwLock<Session>>,
-    cache: Vec<Box<Vec<u8>>>,
-    cache_count: usize
 }
 
 impl Channel {
@@ -19,8 +18,6 @@ impl Channel {
             name,
             closed: false,
             session,
-            cache: vec![],
-            cache_count: 0
         }
     }
 
@@ -28,20 +25,6 @@ impl Channel {
         self.closed
     }
 
-    pub fn write_cache(&mut self, data: Box<Vec<u8>>) {
-        self.cache.push(data);
-        self.cache_count += 1;
-    }
-
-    pub fn flush(&mut self) {
-        self.get_factory();
-        self.cache.clear();
-        self.cache_count = 0;
-    }
-
-    pub fn read_cache(&mut self) -> Option<Box<Vec<u8>>> {
-        self.cache.pop()
-    }
 
     pub fn get_factory(&self) -> MessageFactory {
         MessageFactory::new(self.host_name.clone(), self.name.clone())
@@ -59,11 +42,11 @@ impl Channel {
         self.session.write().unwrap().send(data).unwrap();
     }
 
-    pub fn read(&mut self) -> Result<(DataHead, Vec<u8>), std::io::Error> {
-        self.session.write().unwrap().read()
+    pub fn read(&mut self) -> Result<(Option<DataHead>, Box<Vec<u8>>), Box<dyn Error>> {
+        self.session.write().unwrap().read(&self.name)
     }
 
-    pub fn send_and_read(&mut self, data: Vec<u8>) -> Result<(DataHead, Vec<u8>), std::io::Error> {
-        self.session.write().unwrap().send_and_read(data)
+    pub fn send_and_read(&mut self, data: Vec<u8>) -> Result<(Option<DataHead>, Box<Vec<u8>>), Box<dyn Error>> {
+        self.session.write().unwrap().send_and_read(data, &self.name)
     }
 }
