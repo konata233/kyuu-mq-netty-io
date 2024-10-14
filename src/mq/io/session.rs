@@ -28,10 +28,13 @@ impl Session {
 
     pub fn init(&mut self, self_ref: Arc<RwLock<Session>>) -> Arc<RwLock<Session>> {
         self.self_ref = Some(self_ref.clone());
+        self.set_write_timeout(std::time::Duration::from_millis(1024));
+        self.set_read_timeout(std::time::Duration::from_millis(1024));
         self_ref
     }
 
     pub fn set_read_timeout(&self, timeout: std::time::Duration) {
+        // must set a read timeout, otherwise the stream will block forever!!
         self.stream.write().unwrap().set_read_timeout(Some(timeout)).unwrap();
     }
 
@@ -59,7 +62,7 @@ impl Session {
     }
 
     pub fn drop_all_channels(&mut self) {
-        self.channels.iter_mut().for_each(|(_, ch)| {ch.write().unwrap().close();})
+        self.channels.iter_mut().for_each(|(_, ch)| { ch.write().unwrap().close(); })
     }
 
     pub fn close(&mut self) {
