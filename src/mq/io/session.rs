@@ -58,8 +58,13 @@ impl Session {
         self.channels.remove(&name);
     }
 
+    pub fn drop_all_channels(&mut self) {
+        self.channels.iter_mut().for_each(|(_, ch)| {ch.write().unwrap().close();})
+    }
+
     pub fn close(&mut self) {
         self.channels.clear();
+        self.drop_all_channels();
         self.stream.write().unwrap().shutdown(std::net::Shutdown::Both).unwrap();
     }
 
@@ -84,6 +89,18 @@ impl Session {
                 buf.append(&mut buf_slice);
             }
 
+            let ch = String::from_utf8(head.channel.to_vec())?.trim_end_matches('\0').to_string();
+            return if ch == channel.clone() {
+                Ok((Some(head), Box::from(buf)))
+            } else {
+                self.cache.get_mut(&ch).unwrap().push_back(Box::from(buf));
+                let cached = self.cache.get_mut(channel).unwrap().pop_front();
+                if let Some(c) = cached {
+                    Ok((None, c))
+                } else {
+                    Err("read error".into())
+                }
+            };
             Ok((Some(head), Box::from(buf)))
         } else {
             if let Some(cache) = self.cache.get_mut(channel)
