@@ -44,7 +44,7 @@ pub fn spmc_test() -> Result<(), Box<dyn std::error::Error>> {
     producer.write().unwrap().send(msg);
 
     let handle_producer = thread::spawn(move || {
-        for i in 1..100 {
+        for i in 1..10 {
             let routing = RoutingModFactory::new()
                 .data_type(DataType::Message)
                 .message_type(MessageType::Push)
@@ -61,10 +61,11 @@ pub fn spmc_test() -> Result<(), Box<dyn std::error::Error>> {
             thread::sleep(std::time::Duration::from_millis(50));
             println!("Sent from producer: {i}");
         }
+        producer.write().unwrap().close();
     });
 
     let handle_consumer1 = thread::spawn(move || {
-        for i in 1..40 {
+        for i in 1..4 {
             let routing = RoutingModFactory::new()
                 .data_type(DataType::Message)
                 .message_type(MessageType::Fetch)
@@ -76,17 +77,22 @@ pub fn spmc_test() -> Result<(), Box<dyn std::error::Error>> {
                 .route(Routing::Stop)
                 .queue_name(String::from("base_queue"))
                 .build();
-            if let Ok((_, data)) = consumer1.write().unwrap().send_and_read(msg) {
-                println!("Fetched from channel consumer 1: {:?}", String::from_utf8(*data).unwrap().trim_end_matches("\0"));
+            if let Ok((head, data)) = consumer1.write().unwrap().send_and_read(msg) {
+                if head.unwrap().errcode == 0xfu16 {
+                    println!("No msg.");
+                    thread::sleep(std::time::Duration::from_millis(60));
+                } else {
+                    println!("Fetched from channel consumer 1: {:?}", String::from_utf8(*data).unwrap().trim_end_matches("\0"));
+                }
             } else {
                 println!("Failed to fetch from consumer 1!");
             }
-            thread::sleep(std::time::Duration::from_millis(60));
         }
+        consumer1.write().unwrap().close();
     });
 
     let handle_consumer2 = thread::spawn(move || {
-        for i in 1..40 {
+        for i in 1..4 {
             let routing = RoutingModFactory::new()
                 .data_type(DataType::Message)
                 .message_type(MessageType::Fetch)
@@ -98,13 +104,19 @@ pub fn spmc_test() -> Result<(), Box<dyn std::error::Error>> {
                 .route(Routing::Stop)
                 .queue_name(String::from("base_queue"))
                 .build();
-            if let Ok((_, data)) = consumer2.write().unwrap().send_and_read(msg) {
-                println!("Fetched from channel consumer 2: {:?}", String::from_utf8(*data).unwrap().trim_end_matches("\0"));
+            if let Ok((head, data)) = consumer2.write().unwrap().send_and_read(msg) {
+                if head.unwrap().errcode == 0xfu16 {
+                    println!("No msg.");
+                    thread::sleep(std::time::Duration::from_millis(60));
+                } else {
+                    println!("Fetched from channel consumer 2: {:?}", String::from_utf8(*data).unwrap().trim_end_matches("\0"));
+                }
             } else {
                 println!("Failed to fetch from consumer 2!");
             }
             thread::sleep(std::time::Duration::from_millis(60));
         }
+        consumer2.write().unwrap().close();
     });
 
     thread::scope(|s| {

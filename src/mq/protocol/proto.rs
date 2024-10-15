@@ -21,7 +21,7 @@ pub struct DataHead {
     pub slice_count: u32,
     pub slice_size: u32, // 512
     pub count: u32,
-    pub msg_sign: u16,
+    pub errcode: u16,
     pub ack: u16,
     pub reserved: [u8; 16]
 }
@@ -51,7 +51,7 @@ impl DataHead {
             slice_count,
             slice_size,
             count,
-            msg_sign,
+            errcode: msg_sign,
             ack: 0,
             reserved: [0u8; 16]
         }
@@ -78,7 +78,7 @@ impl Serialize<256> for DataHead {
         serialized.append(&mut self.slice_count.to_le_bytes().to_vec());
         serialized.append(&mut self.slice_size.to_le_bytes().to_vec());
         serialized.append(&mut self.count.to_le_bytes().to_vec());
-        serialized.append(&mut self.msg_sign.to_le_bytes().to_vec());
+        serialized.append(&mut self.errcode.to_le_bytes().to_vec());
         serialized.append(&mut self.ack.to_le_bytes().to_vec());
         serialized.append(&mut self.reserved.to_vec());
         serialized
@@ -125,7 +125,7 @@ impl Deserialize<256> for DataHead {
             slice_count,
             slice_size,
             count,
-            msg_sign,
+            errcode: msg_sign,
             ack,
             reserved
         }
