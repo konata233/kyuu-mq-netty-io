@@ -6,7 +6,7 @@ pub enum RoutingKey {
 }
 
 impl RoutingKey {
-    pub(crate) fn clone(&self) -> RoutingKey {
+    pub fn clone(&self) -> RoutingKey {
         match self {
             RoutingKey::Direct(arr) => RoutingKey::Direct(arr.clone()),
             RoutingKey::Topic(arr) => RoutingKey::Topic(arr.clone()),

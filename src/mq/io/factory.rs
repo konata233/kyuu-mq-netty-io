@@ -1,6 +1,7 @@
 use std::cmp::min;
 use crate::mq::protocol::proto::DataHead;
 use crate::mq::protocol::protobase::Serialize;
+use crate::mq::routing::chain::RoutingChain;
 
 pub enum Command {
     CloseChannel,
@@ -52,7 +53,7 @@ pub struct RoutingMod {
     pub routing_type: RoutingType
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Routing {
     Route(String),
     Any,
@@ -153,6 +154,14 @@ impl MessageFactory {
         self
     }
 
+    pub fn routing_chain(mut self, chain: RoutingChain) -> MessageFactory {
+        for route in chain.routing_key {
+            self = self.route(route);
+        }
+        self = self.queue_name(chain.queue_name);
+        self
+    }
+
     pub fn queue_name(mut self, queue_name: String) -> MessageFactory {
         self.queue_name = queue_name;
         self
@@ -173,7 +182,7 @@ impl MessageFactory {
         channel_serialized.resize(32, 0u8);
 
         let mut routing_mod: [u8; 4] = [0u8; 4];
-        let mut routing = self.routing_mod.unwrap();
+        let routing = self.routing_mod.unwrap();
         match routing.data_type {
             DataType::Message => {
                 routing_mod[0] = 0u8;
@@ -283,7 +292,7 @@ impl MessageFactory {
             <[u8; 32]>::try_from(queue_tmp).unwrap()
         ].concat()).unwrap();
 
-        let mut head = DataHead::new(
+        let head = DataHead::new(
             self.host,
             <[u8; 32]>::try_from(channel_serialized).unwrap(),
             routing_mod,

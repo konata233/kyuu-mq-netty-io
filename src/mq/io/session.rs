@@ -1,11 +1,11 @@
+use crate::mq::io::channel::Channel;
+use crate::mq::protocol::proto::DataHead;
+use crate::mq::protocol::protobase::Deserialize;
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::{Arc, Mutex, RwLock};
-use crate::mq::io::channel::Channel;
-use crate::mq::protocol::proto::DataHead;
-use crate::mq::protocol::protobase::Deserialize;
+use std::sync::{Arc, RwLock};
 
 pub struct Session {
     stream: Arc<RwLock<TcpStream>>,

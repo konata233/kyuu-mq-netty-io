@@ -5,7 +5,7 @@ use crate::mq::io::session;
 
 pub fn spmc_test() -> Result<(), Box<dyn std::error::Error>> {
     let session = session::Session::new("127.0.0.1:11451", "MQ_HOST".to_string());
-    let mut session = Arc::from(RwLock::from(session));
+    let session = Arc::from(RwLock::from(session));
     session
         .clone()
         .write()
@@ -65,7 +65,7 @@ pub fn spmc_test() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let handle_consumer1 = thread::spawn(move || {
-        for i in 1..4 {
+        for _ in 1..4 {
             let routing = RoutingModFactory::new()
                 .data_type(DataType::Message)
                 .message_type(MessageType::Fetch)
@@ -92,7 +92,7 @@ pub fn spmc_test() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let handle_consumer2 = thread::spawn(move || {
-        for i in 1..4 {
+        for _ in 1..4 {
             let routing = RoutingModFactory::new()
                 .data_type(DataType::Message)
                 .message_type(MessageType::Fetch)
